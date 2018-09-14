@@ -1,0 +1,97 @@
+---
+title: "Kaggle Titanic"
+author: "Helen Leung"
+date: "07/09/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#reading in the data
+training <- read.csv("all/train.csv", header= TRUE)
+testing <- read.csv("all/test.csv", header=TRUE)
+
+#Now take steps to combine the data tables
+#create an entire column where the training set has a column that says TRUE so that we can distinguish the 2 data sets afetr having combined them
+training$Istraining <- TRUE 
+testing$Istraining <- FALSE
+#now we need to make sure that the 'survived' column exists in the test set, and that the columns all line up. Build a column in test set filled with NA
+testing$Survived <- NA
+
+titanic.merge <- rbind(training, testing)
+
+#dealing with missing values: cleaning the data
+
+#Embarked
+table(titanic.merge$Embarked) 
+#We can see from this table that there are missing data, as there are 2 values with no data in them.
+
+titanic.merge[titanic.merge$Embarked=="", "Embarked"]
+#we only query the column of embarked, the above filter essentially says that if the value of Embarked is empty, we want these 2 values to come back.
+#now replace these 2 values with the mode (this is just one easy method). The mode is S.
+titanic.merge[titanic.merge$Embarked=="", "Embarked"] <- 'S'
+
+#Age
+table(is.na(titanic.merge$Age))
+#just replace all the false values with the median
+age.median <- median(titanic.merge$Age, na.rm=TRUE)
+titanic.merge[is.na(titanic.merge$Age), "Age"] <- age.median
+
+#Fare
+fare.median <- median(titanic.merge$Fare, na.rm=TRUE)
+titanic.merge[is.na(titanic.merge$Fare), "Fare"] <- fare.median
+
+#now do some categorical classing of factors (everything except survived)
+titanic.merge$Pclass <- as.factor(titanic.merge$Pclass)
+titanic.merge$Sex <- as.factor(titanic.merge$Sex)
+titanic.merge$Embarked <- as.factor(titanic.merge$Embarked)
+
+#now we have processed the data and cleaned it! So split it back up again.
+
+training <- titanic.merge[titanic.merge$Istraining==TRUE,]
+testing <- titanic.merge[titanic.merge$Istraining==FALSE,]
+
+training$Survived <- as.factor(training$Survived)
+
+```
+
+```{r}
+#just having a look at the data/ a quick peak!
+str(training)
+median(training$Age, na.rm=TRUE)
+```
+
+
+```{r} 
+#I'd be doing this to cross validate, do a 50 50 split etc...
+#splitting the data into 2 sets
+train.rows <- sample(length(training), 0.5*length(training)) #this splits 50% of the data to train
+train <- na.omit(training.without.names[train.rows,])
+hold_out <- na.omit(training.without.names[-train.rows,])
+```
+
+
+#train a randomForest
+```{r}
+survived.equation <- "Survived ~ Pclass + Sex + Age + SibSp + Parch + Fare+ Embarked"
+survived.formula <- as.formula(survived.equation)
+
+library(randomForest)
+titanic.model <- randomForest(formula= survived.formula, data=training, ntree=500, mtry=3, type= "classification")
+
+features.equation <- "Pclass + Sex + Age + SibSp + Parch + Fare+ Embarked"
+Survived <- predict(titanic.model, newdata= testing)
+```
+
+#now create an output file with our predictions
+```{r}
+PassengerId <- testing$PassengerId
+output.df <- as.data.frame(PassengerId)
+output.df$Survived <- Survived
+#the next line creates a folder
+write.csv(output.df, file="kaggle_submission1.csv", row.names=FALSE)
+```
+
